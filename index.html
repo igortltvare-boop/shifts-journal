@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f0f1a">
+<title>Журнал смен</title>
+<style>
+:root{
+  --bg:#0f0f1a; --card:#1a1a2e; --card2:#22223a;
+  --accent:#4cc9f0; --accent2:#7209b7;
+  --text:#e8e8e8; --muted:#a0a0b0;
+  --green:#2ecc71; --red:#e74c3c; --yellow:#f1c40f;
+  --border:#2a2a40;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;
+  padding:12px 12px 90px;line-height:1.4;font-size:15px;
+}
+h1{font-size:1.15rem;color:var(--accent);text-align:center;margin:6px 0 12px}
+h2{font-size:1rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 3px 14px rgba(0,0,0,.3)}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:none}
+.row .label{color:var(--muted);font-size:.9rem}
+.row .value{font-weight:600}
+.row.total{border-top:2px solid var(--accent);margin-top:6px;padding-top:10px;border-bottom:none}
+.row.total .label,.row.total .value{font-size:1.05rem;color:var(--green)}
+.row.warn .value{color:var(--red)}
+input,select,button,textarea{font-family:inherit;font-size:1rem}
+input,select,textarea{
+  width:100%;padding:11px 12px;border:2px solid var(--border);
+  border-radius:10px;background:#12121f;color:var(--text);outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
+button{
+  border:none;border-radius:10px;padding:12px;font-weight:600;
+  background:var(--card2);color:var(--text);cursor:pointer;
+  transition:transform .1s,opacity .1s;
+}
+button:active{transform:scale(.98);opacity:.9}
+.btn-main{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;width:100%;margin-top:10px}
+.btn-danger{background:#5a1f1f;color:#ffb3b3;width:100%;margin-top:10px}
+.btn-small{padding:7px 10px;font-size:.85rem}
+.tabs{
+  position:fixed;bottom:0;left:0;right:0;display:flex;
+  background:var(--card);border-top:1px solid var(--border);z-index:1000;
+}
+.tabs button{
+  flex:1;border-radius:0;background:transparent;color:var(--muted);
+  padding:12px 4px;font-size:.78rem;font-weight:600;
+}
+.tabs button.active{color:var(--accent);border-top:3px solid var(--accent)}
+.tab-page{display:none}
+.tab-page.active{display:block}
+.month-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.month-nav button{width:46px;padding:10px 0;font-size:1.2rem}
+.month-title{font-size:1.05rem;font-weight:700;text-align:center;flex:1}
+.item{background:var(--card2);border-radius:10px;padding:10px;margin-bottom:8px}
+.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.item-name{font-weight:600}
+.item-sum{font-weight:700;color:var(--accent);white-space:nowrap}
+.item-meta{font-size:.8rem;color:var(--muted);margin-top:3px}
+.item-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.empty{color:var(--muted);text-align:center;padding:16px 0;font-size:.9rem}
+.hint{font-size:.78rem;color:var(--muted);margin-top:6px}
+.inline-2{display:flex;gap:8px}
+.inline-2 > *{flex:1}
+.badge{display:inline-block;font-size:.72rem;padding:2px 7px;border-radius:6px;background:var(--border);color:var(--muted);margin-left:6px}
+.badge.night{background:#2a2a5a;color:#aab8ff}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.form-grid .full{grid-column:1 / -1}
+textarea{resize:vertical;min-height:70px}
+</style>
+</head>
+<body>
+
+<h1>🗓 Журнал смен</h1>
+
+<!-- ================= СМЕНА ================= -->
+<div class="tab-page active" id="page-shift">
+  <div class="card">
+    <div class="month-nav">
+      <button onclick="shiftMonth(-1)">←</button>
+      <div class="month-title" id="monthTitle">—</div>
+      <button onclick="shiftMonth(1)">→</button>
+    </div>
+    <button class="btn-small" style="width:100%" onclick="goCurrentMonth()">Текущий месяц</button>
+  </div>
+
+  <div class="card">
+    <h2>Добавить смену</h2>
+    <div class="form-grid">
+      <div class="full">
+        <label>Дата</label>
+        <input type="date" id="fDate">
+      </div>
+      <div>
+        <label>Линия</label>
+        <input id="fLine" placeholder="18 / резерв">
+      </div>
+      <div>
+        <label>Бортовой номер</label>
+        <input id="fBus" placeholder="1234">
+      </div>
+      <div>
+        <label>Начало смены</label>
+        <input type="time" id="fStart">
+      </div>
+      <div>
+        <label>Конец смены</label>
+        <input type="time" id="fEnd">
+      </div>
+      <div>
+        <label>Начало обеда</label>
+        <input type="time" id="fLunchStart">
+      </div>
+      <div>
+        <label>Конец обеда</label>
+        <input type="time" id="fLunchEnd">
+      </div>
+      <div class="full">
+        <label>Заметка (замена автобуса, резерв, ремонт и т.п.)</label>
+        <textarea id="fNote" placeholder="например: в 21:00 замена на 5678"></textarea>
+      </div>
+    </div>
+    <button class="btn-main" onclick="addShift()">Сохранить смену</button>
+  </div>
+
+  <div class="card">
+    <h2>Смены месяца</h2>
+    <div id="shiftsList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Итоги месяца</h2>
+    <label>Норма часов в этом месяце</label>
+    <input id="normInput" type="number" step="0.01" min="0" inputmode="decimal" onchange="saveNorm(this.value)">
+    <div class="row"><span class="label">Рабочих часов</span><span class="value" id="sumHours">0 ч</span></div>
+    <div class="row"><span class="label">Ночных часов</span><span class="value" id="sumNight">0 ч</span></div>
+    <div class="row"><span class="label">Смен</span><span class="value" id="sumCount">0</span></div>
+    <div class="row total" id="rowDiff"><span class="label">Отклонение от нормы</span><span class="value" id="sumDiff">0 ч</span></div>
+  </div>
+</div>
+
+<!-- ================= ИСТОРИЯ ================= -->
+<div class="tab-page" id="page-history">
+  <div class="card">
+    <h2>История по месяцам</h2>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<!-- ================= ДАННЫЕ ================= -->
+<div class="tab-page" id="page-data">
+  <div class="card">
+    <h2>Экспорт и импорт</h2>
+    <p class="hint">Данные хранятся в браузере этого устройства. Чтобы перенести на телефон или планшет — экспортируйте файл и импортируйте на другом устройстве.</p>
+    <button class="btn-main" onclick="exportData()">📥 Экспорт в файл</button>
+    <label style="margin-top:14px">Импорт из файла</label>
+    <input type="file" id="importFile" accept="application/json">
+    <button class="btn-main" onclick="importData()">📤 Импортировать</button>
+    <div class="hint">Импорт заменит все текущие данные. Перед импортом сделайте экспорт текущих.</div>
+  </div>
+
+  <div class="card">
+    <h2>Опасная зона</h2>
+    <button class="btn-danger" onclick="clearAll()">🗑 Очистить все данные</button>
+  </div>
+</div>
+
+<!-- ================= НИЖНИЕ ВКЛАДКИ ================= -->
+<div class="tabs">
+  <button class="active" data-tab="shift" onclick="switchTab('shift')">Смена</button>
+  <button data-tab="history" onclick="switchTab('history')">История</button>
+  <button data-tab="data" onclick="switchTab('data')">Данные</button>
+</div>
+
+<script>
+/* ============================================================
+   ХРАНИЛИЩЕ
+   ============================================================ */
+const STORAGE_KEY = 'shifts_app_v1';
+const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+  'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+// state = {
+//   shifts: [ {id, date:"YYYY-MM-DD", line, bus, start:"HH:MM", end:"HH:MM",
+//              lunchStart:"HH:MM", lunchEnd:"HH:MM", note} ],
+//   norms: { "YYYY-MM": число }
+// }
+let state = { shifts: [], norms: {} };
+let currentMonth = null;
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      state.shifts = Array.isArray(parsed.shifts) ? parsed.shifts : [];
+      state.norms = parsed.norms && typeof parsed.norms === 'object' ? parsed.norms : {};
+    }
+  }catch(e){
+    console.error('Ошибка загрузки', e);
+  }
+}
+
+/* ============================================================
+   УТИЛИТЫ
+   ============================================================ */
+function uid(){
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+function pad(n){ return String(n).padStart(2,'0'); }
+function monthKey(year, month1to12){ return year + '-' + pad(month1to12); }
+function parseMonthKey(key){
+  const [y,m] = key.split('-').map(Number);
+  return {year:y, month:m};
+}
+function currentMonthKey(){
+  const d = new Date();
+  return monthKey(d.getFullYear(), d.getMonth()+1);
+}
+function monthTitle(key){
+  const {year,month} = parseMonthKey(key);
+  return MONTH_NAMES[month-1] + ' ' + year;
+}
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+}
+function fmtHours(h){
+  const n = Number(h) || 0;
+  return n.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
+}
+
+/* ============================================================
+   ВРЕМЯ
+   ============================================================ */
+// "HH:MM" -> минуты от начала суток, или null
+function timeToMinutes(str){
+  if(!str) return null;
+  const m = String(str).match(/^(\d{1,2}):(\d{2})$/);
+  if(!m) return null;
+  const h = Number(m[1]); const min = Number(m[2]);
+  if(h<0||h>23||min<0||min>59) return null;
+  return h*60 + min;
+}
+// длительность между двумя временами (может переходить через полночь)
+// возвращает минуты >= 0
+function durationMinutes(startStr, endStr){
+  const s = timeToMinutes(startStr);
+  const e = timeToMinutes(endStr);
+  if(s === null || e === null) return null;
+  let d = e - s;
+  if(d < 0) d += 24*60; // переход через полночь
+  return d;
+}
+// пересечение смены [start, end) с интервалом 22:00–06:00
+// с учётом перехода через полночь. Возвращает минуты ночных.
+function nightMinutes(startStr, endStr){
+  const s = timeToMinutes(startStr);
+  const e = timeToMinutes(endStr);
+  if(s === null || e === null) return 0;
+  // разворачиваем смену в абсолютные минуты от начала суток, с учётом перехода
+  const shiftStart = s;
+  let shiftEnd = e;
+  if(shiftEnd <= shiftStart) shiftEnd += 24*60;
+  // ночные окна: [22:00, 24:00) и [24:00, 30:00) — то есть [22:00, 30:00)
+  // но с учётом того, что смена может начинаться до 22:00 или после
+  // рассмотрим окно [22:00, 30:00) (22:00–06:00 следующего дня)
+  const nightStart = 22*60;
+  const nightEnd = 30*60; // 06:00 следующего дня
+  const overlapStart = Math.max(shiftStart, nightStart);
+  const overlapEnd = Math.min(shiftEnd, nightEnd);
+  return Math.max(0, overlapEnd - overlapStart);
+}
+
+/* ============================================================
+   РАСЧЁТ ОДНОЙ СМЕНЫ
+   ============================================================ */
+function computeShift(shift){
+  const total = durationMinutes(shift.start, shift.end);
+  if(total === null) return {hours:0, night:0, lunch:0};
+
+  let lunch = 0;
+  if(shift.lunchStart && shift.lunchEnd){
+    const l = durationMinutes(shift.lunchStart, shift.lunchEnd);
+    if(l !== null) lunch = l;
+  }
+
+  const work = Math.max(0, total - lunch);
+
+  // ночные считаем по рабочему времени, исключая обед, если он попал в ночное окно
+  let night = nightMinutes(shift.start, shift.end);
+  if(lunch > 0 && shift.lunchStart && shift.lunchEnd){
+    const lunchNight = nightMinutes(shift.lunchStart, shift.lunchEnd);
+    night = Math.max(0, night - lunchNight);
+  }
+
+  return {
+    hours: work / 60,
+    night: night / 60,
+    lunch: lunch
+  };
+}
+
+/* ============================================================
+   СПИСОК СМЕН МЕСЯЦА
+   ============================================================ */
+function shiftsForMonth(key){
+  return state.shifts
+    .filter(s => (s.date||'').slice(0,7) === key)
+    .sort((a,b) => (a.date||'').localeCompare(b.date||'') || (a.start||'').localeCompare(b.start||''));
+}
+
+/* ============================================================
+   ОТРИСОВКА: СМЕНА
+   ============================================================ */
+function renderShift(){
+  document.getElementById('monthTitle').textContent = monthTitle(currentMonth);
+
+  const norm = state.norms[currentMonth] ?? '';
+  document.getElementById('normInput').value = norm;
+
+  const list = document.getElementById('shiftsList');
+  list.innerHTML = '';
+
+  const shifts = shiftsForMonth(currentMonth);
+
+  if(!shifts.length){
+    list.innerHTML = '<div class="empty">Смен пока нет</div>';
+  }else{
+    shifts.forEach(s => {
+      const c = computeShift(s);
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML =
+        '<div class="item-head">' +
+          '<div>' +
+            '<div class="item-name">' + escapeHtml(s.date) +
+              (s.line ? ' • линия ' + escapeHtml(s.line) : '') +
+              (s.bus ? ' • борт ' + escapeHtml(s.bus) : '') +
+            '</div>' +
+            '<div class="item-meta">' +
+              escapeHtml(s.start||'—') + '–' + escapeHtml(s.end||'—') +
+              (c.lunch > 0 ? ' • обед ' + Math.round(c.lunch) + ' мин' : '') +
+              (c.night > 0 ? ' • <span class="badge night">ночные ' + fmtHours(c.night) + '</span>' : '') +
+            '</div>' +
+            (s.note ? '<div class="item-meta">📝 ' + escapeHtml(s.note) + '</div>' : '') +
+          '</div>' +
+          '<div class="item-sum">' + fmtHours(c.hours) + '</div>' +
+        '</div>' +
+        '<div class="item-actions">' +
+          '<button class="btn-small" onclick="deleteShift(\'' + s.id + '\')">Удалить</button>' +
+        '</div>';
+      list.appendChild(el);
+    });
+  }
+
+  renderShiftTotals();
+}
+
+function renderShiftTotals(){
+  const shifts = shiftsForMonth(currentMonth);
+  let hours = 0, night = 0;
+  shifts.forEach(s => {
+    const c = computeShift(s);
+    hours += c.hours;
+    night += c.night;
+  });
+
+  document.getElementById('sumHours').textContent = fmtHours(hours);
+  document.getElementById('sumNight').textContent = fmtHours(night);
+  document.getElementById('sumCount').textContent = shifts.length;
+
+  const normRaw = document.getElementById('normInput').value;
+  const norm = parseFloat(normRaw);
+
+  const diffRow = document.getElementById('rowDiff');
+  const diffVal = document.getElementById('sumDiff');
+
+  if(Number.isFinite(norm) && norm > 0){
+    const diff = hours - norm;
+    const sign = diff > 0 ? '+' : '';
+    diffVal.textContent = sign + fmtHours(diff);
+    diffVal.textContent = sign + diff.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
+    diffRow.classList.toggle('warn', diff < 0);
+    diffRow.querySelector('.label').textContent = diff >= 0 ? 'Переработка' : 'Недоработка';
+  }else{
+    diffVal.textContent = '—';
+    diffRow.classList.remove('warn');
+    diffRow.querySelector('.label').textContent = 'Отклонение от нормы';
+  }
+}
+
+/* ============================================================
+   ДОБАВЛЕНИЕ / УДАЛЕНИЕ
+   ============================================================ */
+function addShift(){
+  const date = document.getElementById('fDate').value;
+  const start = document.getElementById('fStart').value;
+  const end = document.getElementById('fEnd').value;
+  const lunchStart = document.getElementById('fLunchStart').value;
+  const lunchEnd = document.getElementById('fLunchEnd').value;
+  const line = document.getElementById('fLine').value.trim();
+  const bus = document.getElementById('fBus').value.trim();
+  const note = document.getElementById('fNote').value.trim();
+
+  if(!date){ alert('Выберите дату'); return; }
+  if(!start || !end){ alert('Укажите начало и конец смены'); return; }
+  if(timeToMinutes(start) === null || timeToMinutes(end) === null){
+    alert('Некорректное время'); return;
+  }
+  if((lunchStart && !lunchEnd) || (!lunchStart && lunchEnd)){
+    alert('Заполните оба поля обеда или ни одного'); return;
+  }
+
+  const shift = {
+    id: uid(), date, line, bus, start, end,
+    lunchStart: lunchStart || '', lunchEnd: lunchEnd || '', note
+  };
+
+  state.shifts.push(shift);
+  saveState();
+
+  // очистка формы (дату оставляем — часто удобно)
+  document.getElementById('fStart').value = '';
+  document.getElementById('fEnd').value = '';
+  document.getElementById('fLunchStart').value = '';
+  document.getElementById('fLunchEnd').value = '';
+  document.getElementById('fLine').value = '';
+  document.getElementById('fBus').value = '';
+  document.getElementById('fNote').value = '';
+
+  // если добавили смену в другой месяц — переключимся на него
+  const mk = date.slice(0,7);
+  if(mk !== currentMonth){
+    currentMonth = mk;
+  }
+  renderShift();
+}
+
+function deleteShift(id){
+  if(!confirm('Удалить смену?')) return;
+  state.shifts = state.shifts.filter(s => s.id !== id);
+  saveState();
+  renderShift();
+}
+
+function saveNorm(value){
+  const n = parseFloat(value);
+  if(Number.isFinite(n) && n > 0){
+    state.norms[currentMonth] = n;
+  }else{
+    delete state.norms[currentMonth];
+  }
+  saveState();
+  renderShiftTotals();
+}
+
+/* ============================================================
+   ИСТОРИЯ
+   ============================================================ */
+function renderHistory(){
+  const box = document.getElementById('historyList');
+  box.innerHTML = '';
+
+  const keys = new Set(Object.keys(state.norms));
+  state.shifts.forEach(s => {
+    if(s.date) keys.add(s.date.slice(0,7));
+  });
+  // добавим текущий и 12 предыдущих, чтобы было удобно
+  const now = new Date();
+  for(let i=0;i<12;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    keys.add(monthKey(d.getFullYear(), d.getMonth()+1));
+  }
+
+  const sorted = Array.from(keys).sort().reverse();
+  let shown = 0;
+
+  sorted.forEach(key => {
+    const shifts = shiftsForMonth(key);
+    if(!shifts.length && key !== currentMonthKey()) return;
+
+    let hours = 0, night = 0;
+    shifts.forEach(s => {
+      const c = computeShift(s);
+      hours += c.hours;
+      night += c.night;
+    });
+
+    const norm = state.norms[key];
+    const diff = Number.isFinite(norm) && norm > 0 ? hours - norm : null;
+
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.style.cursor = 'pointer';
+    el.onclick = () => { currentMonth = key; switchTab('shift'); renderShift(); };
+
+    let diffText = '';
+    if(diff !== null){
+      const sign = diff > 0 ? '+' : '';
+      diffText = ' • ' + sign + diff.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
+    }
+
+    el.innerHTML =
+      '<div class="item-head">' +
+        '<div><div class="item-name">' + monthTitle(key) + '</div>' +
+        '<div class="item-meta">смен: ' + shifts.length +
+        ' • часов: ' + fmtHours(hours) +
+        ' • ночных: ' + fmtHours(night) + diffText + '</div></div>' +
+        '<div class="item-sum">' + fmtHours(hours) + '</div>' +
+      '</div>';
+    box.appendChild(el);
+    shown++;
+  });
+
+  if(!shown){
+    box.innerHTML = '<div class="empty">Данных пока нет</div>';
+  }
+}
+
+/* ============================================================
+   ЭКСПОРТ / ИМПОРТ / ОЧИСТКА
+   ============================================================ */
+function exportData(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = 'shifts-' + d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + '.json';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(){
+  const fileInput = document.getElementById('importFile');
+  const file = fileInput.files[0];
+  if(!file){ alert('Выберите файл'); return; }
+  if(!confirm('Импорт заменит все текущие данные. Продолжить?')) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const parsed = JSON.parse(e.target.result);
+      if(!parsed || typeof parsed !== 'object') throw new Error('Неверный формат');
+      state.shifts = Array.isArray(parsed.shifts) ? parsed.shifts : [];
+      state.norms = parsed.norms && typeof parsed.norms === 'object' ? parsed.norms : {};
+      saveState();
+      renderShift(); renderHistory();
+      alert('Импорт завершён. Смен: ' + state.shifts.length);
+      fileInput.value = '';
+    }catch(err){
+      alert('Ошибка импорта: ' + err.message);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function clearAll(){
+  if(!confirm('Удалить ВСЕ данные без возможности восстановления?')) return;
+  if(!confirm('Точно? Это необратимо. Рекомендуем сначала сделать экспорт.')) return;
+  state = { shifts: [], norms: {} };
+  saveState();
+  renderShift(); renderHistory();
+}
+
+/* ============================================================
+   НАВИГАЦИЯ
+   ============================================================ */
+function switchTab(name){
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelector('.tabs button[data-tab="' + name + '"]').classList.add('active');
+
+  if(name === 'shift') renderShift();
+  if(name === 'history') renderHistory();
+}
+
+function shiftMonth(delta){
+  const {year, month} = parseMonthKey(currentMonth);
+  const d = new Date(year, month - 1 + delta, 1);
+  currentMonth = monthKey(d.getFullYear(), d.getMonth()+1);
+  renderShift();
+}
+function goCurrentMonth(){
+  currentMonth = currentMonthKey();
+  renderShift();
+}
+
+/* ============================================================
+   СТАРТ
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  loadState();
+  currentMonth = currentMonthKey();
+  document.getElementById('fDate').value = todayISO();
+  renderShift();
+  switchTab('shift');
+});
+</script>
+</body>
+</html>

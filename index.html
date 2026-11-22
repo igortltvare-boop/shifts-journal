@@ -11,7 +11,7 @@
   --bg:#0f0f1a; --card:#1a1a2e; --card2:#22223a;
   --accent:#4cc9f0; --accent2:#7209b7;
   --text:#e8e8e8; --muted:#a0a0b0;
-  --green:#2ecc71; --red:#e74c3c; --yellow:#f1c40f;
+  --green:#2ecc71; --red:#e74c3c;
   --border:#2a2a40;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -92,8 +92,8 @@ textarea{resize:vertical;min-height:70px}
     <button class="btn-small" style="width:100%" onclick="goCurrentMonth()">Текущий месяц</button>
   </div>
 
-  <div class="card">
-    <h2>Добавить смену</h2>
+  <div class="card" id="formCard">
+    <h2 id="formTitle">Добавить смену</h2>
     <div class="form-grid">
       <div class="full">
         <label>Дата</label>
@@ -128,7 +128,8 @@ textarea{resize:vertical;min-height:70px}
         <textarea id="fNote" placeholder="например: в 21:00 замена на 5678"></textarea>
       </div>
     </div>
-    <button class="btn-main" onclick="addShift()">Сохранить смену</button>
+    <button class="btn-main" id="saveShiftBtn" onclick="addShift()">Сохранить смену</button>
+    <button class="btn-small" id="cancelEditBtn" style="display:none;width:100%;margin-top:8px" onclick="cancelEdit()">Отмена</button>
   </div>
 
   <div class="card">
@@ -188,13 +189,9 @@ const STORAGE_KEY = 'shifts_app_v1';
 const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь',
   'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
-// state = {
-//   shifts: [ {id, date:"YYYY-MM-DD", line, bus, start:"HH:MM", end:"HH:MM",
-//              lunchStart:"HH:MM", lunchEnd:"HH:MM", note} ],
-//   norms: { "YYYY-MM": число }
-// }
 let state = { shifts: [], norms: {} };
 let currentMonth = null;
+let editingShiftId = null;
 
 function saveState(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -249,7 +246,6 @@ function fmtHours(h){
 /* ============================================================
    ВРЕМЯ
    ============================================================ */
-// "HH:MM" -> минуты от начала суток, или null
 function timeToMinutes(str){
   if(!str) return null;
   const m = String(str).match(/^(\d{1,2}):(\d{2})$/);
@@ -258,34 +254,33 @@ function timeToMinutes(str){
   if(h<0||h>23||min<0||min>59) return null;
   return h*60 + min;
 }
-// длительность между двумя временами (может переходить через полночь)
-// возвращает минуты >= 0
 function durationMinutes(startStr, endStr){
   const s = timeToMinutes(startStr);
   const e = timeToMinutes(endStr);
   if(s === null || e === null) return null;
   let d = e - s;
-  if(d < 0) d += 24*60; // переход через полночь
+  if(d < 0) d += 24*60;
   return d;
 }
-// пересечение смены [start, end) с интервалом 22:00–06:00
-// с учётом перехода через полночь. Возвращает минуты ночных.
+// Ночные: 22:00–06:00 следующего дня + 00:00–06:00 того же дня (для ранних смен)
 function nightMinutes(startStr, endStr){
   const s = timeToMinutes(startStr);
   const e = timeToMinutes(endStr);
   if(s === null || e === null) return 0;
-  // разворачиваем смену в абсолютные минуты от начала суток, с учётом перехода
-  const shiftStart = s;
+
+  let shiftStart = s;
   let shiftEnd = e;
   if(shiftEnd <= shiftStart) shiftEnd += 24*60;
-  // ночные окна: [22:00, 24:00) и [24:00, 30:00) — то есть [22:00, 30:00)
-  // но с учётом того, что смена может начинаться до 22:00 или после
-  // рассмотрим окно [22:00, 30:00) (22:00–06:00 следующего дня)
-  const nightStart = 22*60;
-  const nightEnd = 30*60; // 06:00 следующего дня
-  const overlapStart = Math.max(shiftStart, nightStart);
-  const overlapEnd = Math.min(shiftEnd, nightEnd);
-  return Math.max(0, overlapEnd - overlapStart);
+
+  // Два окна: [22:00, 30:00) и [0, 06:00). Не перекрываются.
+  const windows = [[22*60, 30*60], [0, 6*60]];
+  let total = 0;
+  for(const [ws, we] of windows){
+    const os = Math.max(shiftStart, ws);
+    const oe = Math.min(shiftEnd, we);
+    if(oe > os) total += oe - os;
+  }
+  return total;
 }
 
 /* ============================================================
@@ -303,7 +298,6 @@ function computeShift(shift){
 
   const work = Math.max(0, total - lunch);
 
-  // ночные считаем по рабочему времени, исключая обед, если он попал в ночное окно
   let night = nightMinutes(shift.start, shift.end);
   if(lunch > 0 && shift.lunchStart && shift.lunchEnd){
     const lunchNight = nightMinutes(shift.lunchStart, shift.lunchEnd);
@@ -364,6 +358,7 @@ function renderShift(){
           '<div class="item-sum">' + fmtHours(c.hours) + '</div>' +
         '</div>' +
         '<div class="item-actions">' +
+          '<button class="btn-small" onclick="editShift(\'' + s.id + '\')">Редактировать</button>' +
           '<button class="btn-small" onclick="deleteShift(\'' + s.id + '\')">Удалить</button>' +
         '</div>';
       list.appendChild(el);
@@ -395,7 +390,6 @@ function renderShiftTotals(){
   if(Number.isFinite(norm) && norm > 0){
     const diff = hours - norm;
     const sign = diff > 0 ? '+' : '';
-    diffVal.textContent = sign + fmtHours(diff);
     diffVal.textContent = sign + diff.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
     diffRow.classList.toggle('warn', diff < 0);
     diffRow.querySelector('.label').textContent = diff >= 0 ? 'Переработка' : 'Недоработка';
@@ -407,7 +401,7 @@ function renderShiftTotals(){
 }
 
 /* ============================================================
-   ДОБАВЛЕНИЕ / УДАЛЕНИЕ
+   ДОБАВЛЕНИЕ / РЕДАКТИРОВАНИЕ / УДАЛЕНИЕ
    ============================================================ */
 function addShift(){
   const date = document.getElementById('fDate').value;
@@ -428,6 +422,23 @@ function addShift(){
     alert('Заполните оба поля обеда или ни одного'); return;
   }
 
+  if(editingShiftId){
+    const s = state.shifts.find(x => x.id === editingShiftId);
+    if(s){
+      s.date = date; s.line = line; s.bus = bus;
+      s.start = start; s.end = end;
+      s.lunchStart = lunchStart || ''; s.lunchEnd = lunchEnd || '';
+      s.note = note;
+    }
+    editingShiftId = null;
+    saveState();
+    cancelEdit();
+    const mk = date.slice(0,7);
+    if(mk !== currentMonth) currentMonth = mk;
+    renderShift();
+    return;
+  }
+
   const shift = {
     id: uid(), date, line, bus, start, end,
     lunchStart: lunchStart || '', lunchEnd: lunchEnd || '', note
@@ -436,7 +447,6 @@ function addShift(){
   state.shifts.push(shift);
   saveState();
 
-  // очистка формы (дату оставляем — часто удобно)
   document.getElementById('fStart').value = '';
   document.getElementById('fEnd').value = '';
   document.getElementById('fLunchStart').value = '';
@@ -445,7 +455,6 @@ function addShift(){
   document.getElementById('fBus').value = '';
   document.getElementById('fNote').value = '';
 
-  // если добавили смену в другой месяц — переключимся на него
   const mk = date.slice(0,7);
   if(mk !== currentMonth){
     currentMonth = mk;
@@ -453,9 +462,46 @@ function addShift(){
   renderShift();
 }
 
+function editShift(id){
+  const s = state.shifts.find(x => x.id === id);
+  if(!s) return;
+  editingShiftId = id;
+
+  document.getElementById('fDate').value = s.date || '';
+  document.getElementById('fLine').value = s.line || '';
+  document.getElementById('fBus').value = s.bus || '';
+  document.getElementById('fStart').value = s.start || '';
+  document.getElementById('fEnd').value = s.end || '';
+  document.getElementById('fLunchStart').value = s.lunchStart || '';
+  document.getElementById('fLunchEnd').value = s.lunchEnd || '';
+  document.getElementById('fNote').value = s.note || '';
+
+  document.getElementById('formTitle').textContent = 'Редактирование смены';
+  document.getElementById('saveShiftBtn').textContent = 'Обновить смену';
+  document.getElementById('cancelEditBtn').style.display = 'block';
+
+  document.getElementById('formCard').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function cancelEdit(){
+  editingShiftId = null;
+  document.getElementById('fDate').value = todayISO();
+  document.getElementById('fLine').value = '';
+  document.getElementById('fBus').value = '';
+  document.getElementById('fStart').value = '';
+  document.getElementById('fEnd').value = '';
+  document.getElementById('fLunchStart').value = '';
+  document.getElementById('fLunchEnd').value = '';
+  document.getElementById('fNote').value = '';
+  document.getElementById('formTitle').textContent = 'Добавить смену';
+  document.getElementById('saveShiftBtn').textContent = 'Сохранить смену';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+}
+
 function deleteShift(id){
   if(!confirm('Удалить смену?')) return;
   state.shifts = state.shifts.filter(s => s.id !== id);
+  if(editingShiftId === id) cancelEdit();
   saveState();
   renderShift();
 }
@@ -482,7 +528,6 @@ function renderHistory(){
   state.shifts.forEach(s => {
     if(s.date) keys.add(s.date.slice(0,7));
   });
-  // добавим текущий и 12 предыдущих, чтобы было удобно
   const now = new Date();
   for(let i=0;i<12;i++){
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
@@ -509,7 +554,12 @@ function renderHistory(){
     const el = document.createElement('div');
     el.className = 'item';
     el.style.cursor = 'pointer';
-    el.onclick = () => { currentMonth = key; switchTab('shift'); renderShift(); };
+    el.onclick = () => {
+      if(editingShiftId) cancelEdit();
+      currentMonth = key;
+      switchTab('shift');
+      renderShift();
+    };
 
     let diffText = '';
     if(diff !== null){
@@ -563,6 +613,7 @@ function importData(){
       state.shifts = Array.isArray(parsed.shifts) ? parsed.shifts : [];
       state.norms = parsed.norms && typeof parsed.norms === 'object' ? parsed.norms : {};
       saveState();
+      cancelEdit();
       renderShift(); renderHistory();
       alert('Импорт завершён. Смен: ' + state.shifts.length);
       fileInput.value = '';
@@ -578,6 +629,7 @@ function clearAll(){
   if(!confirm('Точно? Это необратимо. Рекомендуем сначала сделать экспорт.')) return;
   state = { shifts: [], norms: {} };
   saveState();
+  cancelEdit();
   renderShift(); renderHistory();
 }
 
@@ -595,12 +647,14 @@ function switchTab(name){
 }
 
 function shiftMonth(delta){
+  if(editingShiftId) cancelEdit();
   const {year, month} = parseMonthKey(currentMonth);
   const d = new Date(year, month - 1 + delta, 1);
   currentMonth = monthKey(d.getFullYear(), d.getMonth()+1);
   renderShift();
 }
 function goCurrentMonth(){
+  if(editingShiftId) cancelEdit();
   currentMonth = currentMonthKey();
   renderShift();
 }

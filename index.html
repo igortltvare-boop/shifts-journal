@@ -238,9 +238,19 @@ function escapeHtml(s){
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[ch]));
 }
+
+/* Формат часов: из десятичных долей в "X ч Y мин" */
 function fmtHours(h){
-  const n = Number(h) || 0;
-  return n.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
+  const totalMin = Math.round((Number(h) || 0) * 60);
+  const neg = totalMin < 0;
+  const abs = Math.abs(totalMin);
+  const hh = Math.floor(abs / 60);
+  const mm = abs % 60;
+  let text;
+  if(hh === 0) text = mm + ' мин';
+  else if(mm === 0) text = hh + ' ч';
+  else text = hh + ' ч ' + mm + ' мин';
+  return (neg ? '−' : '') + text;
 }
 
 /* ============================================================
@@ -262,7 +272,6 @@ function durationMinutes(startStr, endStr){
   if(d < 0) d += 24*60;
   return d;
 }
-// Ночные: 22:00–06:00 следующего дня + 00:00–06:00 того же дня (для ранних смен)
 function nightMinutes(startStr, endStr){
   const s = timeToMinutes(startStr);
   const e = timeToMinutes(endStr);
@@ -272,7 +281,6 @@ function nightMinutes(startStr, endStr){
   let shiftEnd = e;
   if(shiftEnd <= shiftStart) shiftEnd += 24*60;
 
-  // Два окна: [22:00, 30:00) и [0, 06:00). Не перекрываются.
   const windows = [[22*60, 30*60], [0, 6*60]];
   let total = 0;
   for(const [ws, we] of windows){
@@ -389,8 +397,8 @@ function renderShiftTotals(){
 
   if(Number.isFinite(norm) && norm > 0){
     const diff = hours - norm;
-    const sign = diff > 0 ? '+' : '';
-    diffVal.textContent = sign + diff.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
+    const sign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
+    diffVal.textContent = sign + fmtHours(Math.abs(diff));
     diffRow.classList.toggle('warn', diff < 0);
     diffRow.querySelector('.label').textContent = diff >= 0 ? 'Переработка' : 'Недоработка';
   }else{
@@ -563,8 +571,8 @@ function renderHistory(){
 
     let diffText = '';
     if(diff !== null){
-      const sign = diff > 0 ? '+' : '';
-      diffText = ' • ' + sign + diff.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ч';
+      const sign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
+      diffText = ' • ' + sign + fmtHours(Math.abs(diff));
     }
 
     el.innerHTML =
